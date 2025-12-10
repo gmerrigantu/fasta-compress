@@ -13,11 +13,22 @@ typedef struct {
     char    *header;
     uint8_t  *seq;
     size_t   seq_len;
+    size_t   real_len;
 } CompressedSequence;
+
+void clean_sequence(char* seq) {
+    char* d = seq;
+    do {
+        while (*d == '\n' || *d == '\r') {
+            ++d;
+        }
+    } while ((*seq++ = *d++));
+}
 
 uint8_t encode_base(char b) {
     switch(b) {
         case 'A': return 0b00;
+
         case 'C': return 0b01;
         case 'G': return 0b10;
         case 'T': return 0b11;
@@ -143,6 +154,8 @@ RawSequence* split_seq(const char* string) {
     memcpy(sequence->seq, string + index + 1, seq_len);
     sequence->seq[seq_len] = '\0';
 
+    clean_sequence(sequence->seq);
+
     return sequence;
 }
 
@@ -202,6 +215,7 @@ CompressedSequence* compress_sequence(const RawSequence* seq) {
 
     new_seq->header = seq->header;
     new_seq->seq_len = num_bytes;
+    new_seq->real_len = raw_len;
     new_seq->seq = calloc(num_bytes, sizeof(uint8_t));
     if (!new_seq->seq) {
         free(new_seq);
@@ -241,6 +255,7 @@ int write_compressed_sequences(CompressedSequence** sequences, int count, char* 
         fwrite(current->header, 1, header_len, f);
 
         fwrite(&current->seq_len, sizeof(size_t), 1, f);
+        fwrite(&current->real_len, sizeof(size_t), 1, f);
         fwrite(current->seq, 1, current->seq_len, f);
    }
 
@@ -250,17 +265,24 @@ int write_compressed_sequences(CompressedSequence** sequences, int count, char* 
 
 int compress_file(char* fname, char* outname, char* custom_name) {
 
-    char* splitname = custom_name;
+    char* splitname;
 
-    if (custom_name == NULL) {
-        int a;
-        splitname = split_string(fname, '.', &a)[0];
+    if (custom_name != NULL) {
+        splitname = malloc(strlen(custom_name) + 1);
+        strcpy(splitname, custom_name);
+    } else {
+        char *dot = strrchr(fname, '.');
+        size_t len;
+        if (dot) {
+            len = dot - fname;
+        } else {
+            len = strlen(fname);
+        }
+        splitname = malloc(len + 3);
+        strncpy(splitname, fname, len);
+        splitname[len] = '\0';
+        strcat(splitname, ".f");
     }
-
-    char* new_splitname = malloc(strlen(splitname) + 3);
-    strcpy(new_splitname, splitname);
-    strcat(new_splitname, ".f");
-    splitname = new_splitname;
     
     int num_seqs;
     RawSequence* raw_fasta = read_raw_sequence(fname, &num_seqs);
@@ -327,6 +349,7 @@ CompressedSequence* read_compressed_sequence(const char* fname, int* seq_count) 
 
 
         fread(&sequences[count].seq_len, sizeof(size_t), 1, f);
+        fread(&sequences[count].real_len, sizeof(size_t), 1, f);
 
 
         sequences[count].seq = malloc(sequences[count].seq_len);
@@ -343,15 +366,18 @@ CompressedSequence* read_compressed_sequence(const char* fname, int* seq_count) 
 RawSequence* descompress_sequence(const CompressedSequence* seq) {
     RawSequence* new_seq = malloc(sizeof(RawSequence));
     new_seq->header = seq->header;
-    new_seq->seq = malloc(sizeof(char) * seq->seq_len);
+    new_seq->seq = malloc(sizeof(char) * (seq->real_len + 1));
 
+    int char_idx = 0;
     for (int i = 0; i < seq->seq_len; i++) {
         for (int b = 0; b < 4; b++) {
+            if (char_idx >= seq->real_len) break;
             uint8_t byte = seq->seq[i];
             uint8_t base = (byte >> (6 - b * 2)) & 0b11;
-            new_seq->seq[i * 4 + b] = decodebase(base);
+            new_seq->seq[char_idx++] = decodebase(base);
         }
     }
+    new_seq->seq[seq->real_len] = '\0';
 
     return new_seq;
 }
@@ -366,6 +392,7 @@ int write_raw_sequence(RawSequence** sequences, int count, char* fname) {
 
     for (int i = 0; i < count; i++) {
 
+        fputc('>', fp);
         fwrite(sequences[i]->header, sizeof(char), strlen(sequences[i]->header), fp);
         fputc('\n', fp);
 
@@ -380,17 +407,24 @@ int write_raw_sequence(RawSequence** sequences, int count, char* fname) {
 }
 
 int decompress_file(char* fname, char* outname, char* custom_name) {
-    char* splitname = custom_name;
+    char* splitname;
 
-    if (custom_name == NULL) {
-        int a;
-        splitname = split_string(fname, '.', &a)[0];
+    if (custom_name != NULL) {
+        splitname = malloc(strlen(custom_name) + 1);
+        strcpy(splitname, custom_name);
+    } else {
+        char *dot = strrchr(fname, '.');
+        size_t len;
+        if (dot) {
+            len = dot - fname;
+        } else {
+            len = strlen(fname);
+        }
+        splitname = malloc(len + 7);
+        strncpy(splitname, fname, len);
+        splitname[len] = '\0';
+        strcat(splitname, ".fasta");
     }
-
-    char* new_splitname = malloc(strlen(splitname) + 7);
-    strcpy(new_splitname, splitname);
-    strcat(new_splitname, ".fasta");
-    splitname = new_splitname;
 
     int num_seqs;
     CompressedSequence* compressed_data = read_compressed_sequence(fname, &num_seqs);
@@ -413,6 +447,7 @@ int decompress_file(char* fname, char* outname, char* custom_name) {
         return 1;
     }
 
+    printf("Successfully decompressed to file: %s", splitname);
     return 0;
 
 }

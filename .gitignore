@@ -1,2 +1,5 @@
-/a.out
-/file.fasta
+*.out
+*.fasta
+*.f
+*.fna
+/fasta-compress
