@@ -243,7 +243,7 @@ int write_compressed_sequences(CompressedSequence** sequences, int count, char* 
     f = fopen(fname, "wb");
 
     if (f == NULL) {
-      perror("Error opening file");
+      perror("Error opening file. Use --help for guide");
       return 1;
     }
 
@@ -285,10 +285,20 @@ int compress_file(char* fname, char* outname, char* custom_name) {
     }
     
     int num_seqs;
+    
+    FILE *f_in = fopen(fname, "rb");
+    if (!f_in) {
+        printf("Error reading file: %s. Use --help for guide\n", fname);
+        return 1;
+    }
+    fseek(f_in, 0, SEEK_END);
+    long input_size = ftell(f_in);
+    fclose(f_in);
+
     RawSequence* raw_fasta = read_raw_sequence(fname, &num_seqs);
     
     if (!raw_fasta) {
-        printf("Error reading file: %s\n", fname);
+        printf("Error reading file: %s. Use --help for guide\n", fname);
         return 1;
     }
 
@@ -299,18 +309,28 @@ int compress_file(char* fname, char* outname, char* custom_name) {
     }
 
     if (write_compressed_sequences(compressed_fasta, num_seqs, splitname) == 0) {
+        FILE *f_out = fopen(splitname, "rb");
+        long output_size = 0;
+        if (f_out) {
+            fseek(f_out, 0, SEEK_END);
+            output_size = ftell(f_out);
+            fclose(f_out);
+        }
+
         printf("Successfully compressed to file: %s\n", splitname);
+        printf("Original size: %ld bytes\n", input_size);
+        printf("Compressed size: %ld bytes\n", output_size);
         return 0;
     }
 
-    printf("%s\n", "There was an issue compressing your file");
+    printf("%s\n", "There was an issue compressing your file. Use --help for guide");
     return 1;
 }
 
 CompressedSequence* read_compressed_sequence(const char* fname, int* seq_count) {
     FILE* f = fopen(fname, "rb");
     if (!f) {
-        perror("Error opening file");
+        perror("Error opening file. Use --help for guide");
         return NULL;
     }
 
@@ -387,7 +407,7 @@ int write_raw_sequence(RawSequence** sequences, int count, char* fname) {
     FILE* fp = fopen(fname, "wb");
 
     if (fp == NULL) {
-        perror("Error writing to file");
+        perror("Error writing to file. Use --help for guide");
     }
 
     for (int i = 0; i < count; i++) {
@@ -430,7 +450,7 @@ int decompress_file(char* fname, char* outname, char* custom_name) {
     CompressedSequence* compressed_data = read_compressed_sequence(fname, &num_seqs);
 
     if (!compressed_data) {
-        printf("Error reading file: %s\n", fname);
+        printf("Error reading file: %s. Use --help for guide\n", fname);
         return 1;
     }
 
@@ -443,11 +463,11 @@ int decompress_file(char* fname, char* outname, char* custom_name) {
     }
 
     if (write_raw_sequence(decompressed_data, num_seqs, splitname)) {
-        perror("Error writing to file");
+        perror("Error writing to file. Use --help for guide");
         return 1;
     }
 
-    printf("Successfully decompressed to file: %s", splitname);
+    printf("Successfully decompressed to file: %s\n", splitname);
     return 0;
 
 }
@@ -460,7 +480,26 @@ int main(int argc, char *argv[]) {
 
 
     if (argc < 3) {
-        printf("%s", "No argument supplied\n");
+        if (!strcmp(argv[1], "--help")) {
+            printf("FASTA Compression Tool - Usage Guide\n");
+            printf("====================================\n\n");
+            printf("This tool compresses and decompresses FASTA files using 2-bit encoding.\n\n");
+            printf("COMMANDS:\n");
+            printf("  compress <input_file> [output_file]\n");
+            printf("    Compresses a FASTA file. If output_file is not specified,\n");
+            printf("    creates a .f file with the same base name.\n\n");
+            printf("  decompress <input_file> [output_file]\n");
+            printf("    Decompresses a .f file back to FASTA format. If output_file\n");
+            printf("    is not specified, creates a .fasta file with the same base name.\n\n");
+            printf("EXAMPLES:\n");
+            printf("  %s compress sequence.fasta\n", argv[0]);
+            printf("  %s compress sequence.fasta compressed.f\n", argv[0]);
+            printf("  %s decompress compressed.f\n", argv[0]);
+            printf("  %s decompress compressed.f output.fasta\n\n", argv[0]);
+            return 0;
+        }
+
+        printf("%s", "No argument supplied. Use --help for guide\n");
         return 0;
     } else if (argc > 3) {
         dest = argv[3];
@@ -473,7 +512,7 @@ int main(int argc, char *argv[]) {
     } else if (!strcmp(argv[1], "decompress")) {
         decompress_file(src, dest, dest);
     } else {
-        printf("Invalid command. Use 'compress' or 'decompress'\n");
+        printf("Invalid command. Use --help for guide'\n");
         return 1;
     }
 
