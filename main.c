@@ -28,10 +28,14 @@ void clean_sequence(char* seq) {
 uint8_t encode_base(char b) {
     switch(b) {
         case 'A': return 0b00;
-
         case 'C': return 0b01;
         case 'G': return 0b10;
         case 'T': return 0b11;
+
+        case 'a': return 0b00;
+        case 'c': return 0b01;
+        case 'g': return 0b10;
+        case 't': return 0b11;
         default:  return 0b00; 
     }
 }
