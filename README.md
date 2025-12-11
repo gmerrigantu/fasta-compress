@@ -1,6 +1,6 @@
 # FASTA Compress
 
-A simple and efficient tool to compress and decompress FASTA files using 2-bit encoding for DNA sequences.
+A basic tool to compress and decompress FASTA files using 2-bit encoding for DNA sequences.
 
 ## Features
 
